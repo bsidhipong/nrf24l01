@@ -19,11 +19,17 @@
 #include <util/delay.h>
 #include "nrf24l01.h"
 #include "spi.h"
-#include "util.h"
 
 #if !(defined(NRF24L01_HARDWARE_DEVDUINO_V2) || \
       defined(NRF24L01_HARDWARE_RFTOY_V1))
 #pragma GCC error "nRF24L01+ radio implementation must be defined."
+#endif
+
+#ifndef cbi
+#define cbi(sfr,bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif
+#ifndef sbi
+#define sbi(sfr,bit) (_SFR_BYTE(sfr) |= _BV(bit))
 #endif
 
 #if defined(NRF24L01_HARDWARE_DEVDUINO_V2)
@@ -41,9 +47,6 @@
 #define ce(state) __ce_##state
 #define csn(state) __csn_##state
 
-uint8_t nrf24l01_flush_transmit_queue( void );
-uint8_t nrf24l01_flush_receive_queue( void );
-
 #if defined(NRF24L01_HARDWARE_DEVDUINO_V2)
 ISR (INT0_vect)
 {
@@ -55,8 +58,8 @@ static uint8_t status = 0;
 void nrf24l01_init( void )
 {
 	register uint8_t content;
-#if defined(NRF24L01_HARDWARE_DEVDUINO_V2)
 	/* Set up chip-select and chip-enable. */
+#if defined(NRF24L01_HARDWARE_DEVDUINO_V2)
 	sbi(DDRB, DDB0);
 	sbi(DDRD, DDD7);
 #elif defined(NRF24L01_HARDWARE_RFTOY_V1)
@@ -76,7 +79,7 @@ void nrf24l01_init( void )
 	 * • No interrupts
 	 * • 16-bit CRC */
 	nrf24l01_write_register(CONFIG,
-			((0 << MASK_RX_DR) | 
+			((0 << MASK_RX_DR) |
 			 (0 << MASK_TX_DS) |
 			 (0 << MASK_MAX_RT) |
 			 (1 << EN_CRC) |
@@ -126,7 +129,6 @@ void nrf24l01_init( void )
 		spi_send(0x73);
 		nrf24l01_write_register(FEATURE, content | _BV(EN_DPL) | _BV(EN_DYN_ACK));
 	}
-	/* */
 	/* 6.4 PA control
 	 * The PA control is used to set the output power from the nRF24L01 power
 	 * amplifier (PA). In TX mode PA control has four programmable steps,
@@ -146,8 +148,8 @@ void nrf24l01_init( void )
 	/* clear RX_DR, TX_DS, and MAX_RT bits by writing 1 to the corresponding bits in STATUS register */
 	nrf24l01_write_register(STATUS, (_BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT)));
 	nrf24l01_set_channel(1);
-	nrf24l01_flush_transmit_queue( );
-	nrf24l01_flush_receive_queue( );
+	status = spi_exchange(FLUSH_TX);
+	status = spi_exchange(FLUSH_RX);
 	csn(high);
 }
 
@@ -234,22 +236,6 @@ uint8_t nrf24l01_read_multibyte_register( uint8_t reg_no, uint8_t *content, uint
 	return status;
 }
 
-uint8_t nrf24l01_flush_receive_queue( void )
-{
-	csn(low);
-	status = spi_exchange(FLUSH_RX);
-	csn(high);
-	return status;
-}
-
-uint8_t nrf24l01_flush_transmit_queue( void )
-{
-	csn(low);
-	status = spi_exchange(FLUSH_TX);
-	csn(high);
-	return status;
-}
-
 uint8_t nrf24l01_transmit( const void *payload, uint8_t payload_size )
 {
 	uint8_t transmission_status;
@@ -263,7 +249,7 @@ uint8_t nrf24l01_transmit( const void *payload, uint8_t payload_size )
 	csn(high);
 	/* starts the transmission... */
 	ce(high); _delay_us(15); ce(low);
-	_delay_us(150); /* 130us TX settling time */
+	_delay_us(150); /* 130μs TX settling time */
 	do {
 		uint8_t observe_tx = nrf24l01_read_register(OBSERVE_TX);
 	} while (0 == (status & (_BV(TX_DS) | _BV(MAX_RT))));
@@ -315,7 +301,7 @@ uint8_t nrf24l01_transition( nrf24l01_state_transition_t state )
 			nrf24l01_write_register(STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT));
 			nrf24l01_write_register(CONFIG, config_register | _BV(PRIM_RX));
 			ce(high);
-			_delay_us(150); /* 130us RX settling time */
+			_delay_us(150); /* 130μs RX settling time */
 			break;
 		case STANDBY_I:
 			ce(low);
@@ -323,11 +309,11 @@ uint8_t nrf24l01_transition( nrf24l01_state_transition_t state )
 		case STANDBY_II:
 			/* nRF24L01 will only transition into this state if:
 			 * • PRIM_RX = 0
-			 * • CE = 1 
+			 * • CE = 1
 			 * • TX FIFO is empty (not under our control) */
 			nrf24l01_write_register(CONFIG, config_register & ~_BV(PRIM_RX));
 			ce(high);
-			_delay_us(150); /* 130us TX settling time */
+			_delay_us(150); /* 130μs TX settling time */
 			break;
 	}
 	return status;
