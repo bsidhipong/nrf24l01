@@ -47,12 +47,6 @@
 #define ce(state) __ce_##state
 #define csn(state) __csn_##state
 
-#if defined(NRF24L01_HARDWARE_DEVDUINO_V2)
-ISR (INT0_vect)
-{
-}
-#endif
-
 static uint8_t status = 0;
 
 void nrf24l01_init( void )
