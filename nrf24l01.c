@@ -17,8 +17,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
+#include <spi.h>
 #include "nrf24l01.h"
-#include "spi.h"
 
 #if !(defined(NRF24L01_HARDWARE_DEVDUINO_V2) || \
       defined(NRF24L01_HARDWARE_RFTOY_V1))
