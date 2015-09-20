@@ -33,7 +33,6 @@
 #endif
 
 #if defined(NRF24L01_HARDWARE_DEVDUINO_V2)
-#define RADIO_IRQ D2
 #define __ce_low sbi(PORTB,PB0)
 #define __ce_high cbi(PORTB,PB0)
 #define __csn_high sbi(PORTD,PD7)
